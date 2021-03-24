@@ -39,6 +39,7 @@ namespace ReportFromXmlAndTxt
             this.b_Open_Xml = new System.Windows.Forms.Button();
             this.b_Open_Txt = new System.Windows.Forms.Button();
             this.b_Create = new System.Windows.Forms.Button();
+            this.sfd_SaveFile = new System.Windows.Forms.SaveFileDialog();
             this.SuspendLayout();
             // 
             // fd_XmlFile
@@ -148,6 +149,7 @@ namespace ReportFromXmlAndTxt
         private System.Windows.Forms.Button b_Open_Xml;
         private System.Windows.Forms.Button b_Open_Txt;
         private System.Windows.Forms.Button b_Create;
+        private System.Windows.Forms.SaveFileDialog sfd_SaveFile;
     }
 }
 

@@ -38,63 +38,131 @@ namespace ReportFromXmlAndTxt
                     return;
                 }
 
-                List<OutputDto> output = new List<OutputDto>();
+                string fileName = fd_TxtFile.SafeFileName.Split(" ")[0].Replace("[", "");
+                sfd_SaveFile.FileName = $"{fileName} Company - Explanation of Errors.xlsx";
 
-                formBCTransmitterSubmissionDtl.ACATransmitterSubmissionDetail.TransmitterErrorDetailGrp.All(a =>
+                if (sfd_SaveFile.ShowDialog() == DialogResult.OK)
                 {
+                    FileInfo fi = new FileInfo(@$"ErrorExplanation.xlsx");
+                    var explanationExcelFile = new ExcelPackage(fi);
+                    var wse = explanationExcelFile.Workbook.Worksheets[0];
 
-                    string[] uniqe = a?.UniqueRecordId?.Split("|");
-                    if (uniqe is { })
+                    var start = wse.Dimension.Start;
+                    var end = wse.Dimension.End;
+
+                    List<ErrorExplanationDto> errorExplanation = new List<ErrorExplanationDto>();
+
+                    for (int r = start.Row + 1; r <= end.Row; r++)
                     {
-                        int personNumber = Convert.ToInt32(uniqe[2]);
-                        TxtInput single = _txtInput.FirstOrDefault(f => f.PersonNumber == personNumber);
-                        output.Add(new OutputDto()
+                        errorExplanation.Add(new ErrorExplanationDto()
                         {
-                            ErrorTitle = a.ErrorMessageDetail.ErrorMessageCd,
-                            ErrorDescription = a.ErrorMessageDetail.ErrorMessageTxt,
-                            PersonNumber = personNumber,
-                            PersonFullName = $"{single.Firstname} {single.Lastname}"
+                            ErrorType = wse.Cells[r, 1].Text == "" ? "All" : wse.Cells[r, 1].Text,
+                            ErrorTitle = wse.Cells[r, 2].Text,
+                            ErrorExplanation = wse.Cells[r, 3].Text
                         });
                     }
 
+                    AddExplanation addExplanation = new AddExplanation();
+                    formBCTransmitterSubmissionDtl.ACATransmitterSubmissionDetail.TransmitterErrorDetailGrp.Select(s=>s.ErrorMessageDetail?.ErrorMessageCd).Where(s=>s is { }).Distinct().All(a =>
+                      {
+                          if (!errorExplanation.Any(f => f.ErrorType == "All" && f.ErrorTitle.ToLower().Trim() == a?.ToLower().Trim()))
+                          {
+                              addExplanation.tb_ErrorTitle.Text = a;
+                              addExplanation.rtb_Explanation.Text = "";
 
-                    return true;
-                });
+                              if (addExplanation.ShowDialog() == DialogResult.OK)
+                                  errorExplanation.Add(addExplanation.errorExplanation);
+                          }
+
+                          return true;
+                      });
 
 
-                FileInfo xlsTmpFileName = new FileInfo($"Report{DateTime.Now.ToString("yyyy_MM_dd_hh_mm_ss")}.xlsx");
-                ExcelPackage excelFile = new ExcelPackage(xlsTmpFileName);
+                    List<OutputDto> output = new List<OutputDto>();
 
-                if (excelFile.Workbook.Worksheets.Count == 0)
-                {
-                    excelFile.Workbook.Worksheets.Add("Report");
+                    formBCTransmitterSubmissionDtl.ACATransmitterSubmissionDetail.TransmitterErrorDetailGrp.All(a =>
+                    {
 
+                        string[] uniqe = a?.UniqueRecordId?.Split("|");
+
+                        if (uniqe is { })
+                        {
+                            int personNumber = Convert.ToInt32(uniqe[2]);
+                            TxtInput single = _txtInput.FirstOrDefault(f => f.PersonNumber == personNumber);
+
+                            var explanations = errorExplanation.Where(f => f.ErrorTitle.ToLower().Trim() == a.ErrorMessageDetail.ErrorMessageCd.ToLower().Trim());
+                            string explanation = "";
+
+                            if (explanations is { } && explanations.Count() > 0)
+                            {
+                                if (explanations.Any(a => a.ErrorType == fd_TxtFile.SafeFileName.Split("-")[0]))
+                                    explanation = explanations.FirstOrDefault(a => a.ErrorType == fd_TxtFile.SafeFileName.Split("-")[0]).ErrorExplanation;
+                                if (explanations.Any(a => a.ErrorType == "All"))
+                                    explanation = explanations.FirstOrDefault(a => a.ErrorType == "All").ErrorExplanation;
+
+                            }
+                            //else
+                            //{
+
+                            //    addExplanation.tb_ErrorTitle.Text = a.ErrorMessageDetail.ErrorMessageCd;
+                            //    addExplanation.rtb_Explanation.Text = "";
+
+                            //    if (addExplanation.ShowDialog() == DialogResult.OK)
+                            //    {
+                            //        explanation = addExplanation.errorExplanation.ErrorExplanation;
+                            //        errorExplanation.Add(addExplanation.errorExplanation);
+                            //    }
+
+                            //}
+
+                            output.Add(new OutputDto()
+                            {
+                                ErrorTitle = a.ErrorMessageDetail.ErrorMessageCd,
+                                ErrorDescription = a.ErrorMessageDetail.ErrorMessageTxt + " " + a.ErrorMessageDetail.XpathContent,
+                                PersonNumber = personNumber,
+                                PersonFullName = $"{single.Firstname} {single.Lastname}",
+                                ErrorExplanation = explanation
+                            });
+                        }
+
+
+                        return true;
+                    });
+
+
+                    FileInfo xlsTmpFileName = new FileInfo(sfd_SaveFile.FileName);
+                    ExcelPackage excelFile = new ExcelPackage(xlsTmpFileName);
+
+                    if (excelFile.Workbook.Worksheets.Count == 0)
+                    {
+                        excelFile.Workbook.Worksheets.Add("Report");
+
+                    }
+                    var ws = excelFile.Workbook.Worksheets[0];
+
+                    ws.Cells[1, 1].Value = "Person";
+                    ws.Cells[1, 2].Value = "Error title";
+                    ws.Cells[1, 3].Value = "Error description";
+                    ws.Cells[1, 4].Value = "Error explanation";
+
+                    int row = 2;
+
+                    foreach (var item in output.OrderBy(o => o.ErrorTitle))
+                    {
+                        ws.Cells[row, 1].Value = $"{item.PersonFullName} - {item.PersonNumber}";
+                        ws.Cells[row, 2].Value = item.ErrorTitle;
+                        ws.Cells[row, 3].Value = item.ErrorDescription;
+                        ws.Cells[row, 4].Value = item.ErrorExplanation;
+                        row++;
+                    }
+
+                    FileStream fs = new FileStream(xlsTmpFileName.FullName, FileMode.Create);
+                    excelFile.SaveAs(fs);
+
+                    fs.Close();
+
+                    MessageBox.Show("I'm done. Your report is ready.");
                 }
-                var ws = excelFile.Workbook.Worksheets[0];
-
-                ws.Cells[1, 1].Value = "Person";
-                ws.Cells[1, 2].Value = "Error title";
-                ws.Cells[1, 3].Value = "Error description";
-                ws.Cells[1, 4].Value = "Error explanation";
-
-                int row = 2;
-
-                foreach (var item in output.OrderBy(o => o.ErrorTitle))
-                {
-                    ws.Cells[row, 1].Value = $"{item.PersonFullName} - {item.PersonNumber}";
-                    ws.Cells[row, 2].Value = item.ErrorTitle;
-                    ws.Cells[row, 3].Value = item.ErrorDescription;
-                    ws.Cells[row, 4].Value = "";
-                    row++;
-                }
-
-                FileStream fs = new FileStream(xlsTmpFileName.FullName, FileMode.Create);
-                excelFile.SaveAs(fs);
-
-                fs.Close();
-
-                MessageBox.Show("I'm done. Your report is ready.");
-
             }
             catch (Exception ex)
             {

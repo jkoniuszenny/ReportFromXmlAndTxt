@@ -11,4 +11,10 @@
     <PackageReference Include="EPPlus" Version="5.6.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="ErrorExplanation.xlsx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
